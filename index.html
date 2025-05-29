@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>European Mini Cards - Google Sheets Integration</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 5mm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: white;
+        }
+        
+        .setup-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+        }
+        
+        .setup-container h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .setup-container input, .setup-container button {
+            margin: 5px;
+            padding: 8px;
+            font-size: 14px;
+        }
+        
+        .setup-container input {
+            width: 400px;
+        }
+        
+        .setup-container button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .setup-container button:hover {
+            background: #3367d6;
+        }
+        
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+        
+        .status.success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        
+        .page {
+            width: 215.9mm;
+            min-height: 279.4mm;
+            padding: 0;
+            background: white;
+            margin: 20px auto;
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 68mm);
+            grid-template-rows: repeat(6, 44mm);
+            gap: 0.5mm;
+            justify-content: center;
+            align-content: center;
+        }
+        
+        .card {
+            width: 68mm;
+            height: 44mm;
+            border: 2mm solid #000;
+            padding: 3mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: white;
+            font-size: 11pt;
+            line-height: 1.2;
+            position: relative;
+        }
+        
+        .card-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 2mm;
+            min-height: 12pt;
+        }
+        
+        .card-top-left, .card-top-right {
+            font-weight: bold;
+            font-size: 10pt;
+            color: #333;
+        }
+        
+        .card-title {
+            font-weight: bold;
+            font-size: 14pt;
+            text-align: center;
+            margin-bottom: 2mm;
+        }
+        
+        .card-content {
+            flex-grow: 1;
+            text-align: center;
+        }
+        
+        .card-footer {
+            font-size: 11pt;
+            text-align: center;
+            color: #666;
+            margin-top: 2mm;
+        }
+        
+        .card-footer {
+            font-size: 7pt;
+            text-align: center;
+            color: #666;
+            margin-top: 2mm;
+        }
+        
+        @media print {
+            .setup-container {
+                display: none;
+            }
+            
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            
+            .page {
+                page-break-after: always;
+                margin: 0;
+            }
+            
+            .page:last-child {
+                page-break-after: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <h2>Google Sheets Integration Setup</h2>
+        <p><strong>Step 1:</strong> Get your Google Sheets API key from <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></p>
+        <input type="text" id="apiKey" placeholder="Enter your Google Sheets API Key">
+        <br>
+        <p><strong>Step 2:</strong> Enter your Google Sheet ID (from the URL between /d/ and /edit)</p>
+        <input type="text" id="sheetId" placeholder="Enter your Google Sheet ID">
+        <br>
+        <p><strong>Step 3:</strong> Enter the range (e.g., Sheet1!A:G for columns A-G)</p>
+        <input type="text" id="sheetRange" placeholder="Sheet1!A:G" value="Sheet1!A:G">
+        <br>
+        <button onclick="loadSheetData()">Load Cards from Google Sheet</button>
+        <button onclick="showSampleData()">Show Sample Data</button>
+        <br>
+        <div style="margin-top: 15px;">
+            <label style="font-weight: bold;">Layout Options:</label><br>
+            <label><input type="radio" name="layout" value="portrait-portrait" checked onchange="changeLayout()"> Portrait Cards on Portrait Page (4×4)</label><br>
+            <label><input type="radio" name="layout" value="landscape-landscape" onchange="changeLayout()"> Landscape Cards on Landscape Page (3×6)</label>
+        </div>
+        <div id="status"></div>
+        
+        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px;">
+            <h4>Expected Sheet Format:</h4>
+            <p>Column A: Border Color (e.g., red, #FF0000, rgb(255,0,0))<br>
+            Column B: Top Left Text (cost, ability icon, etc.)<br>
+            Column C: Card Title<br>
+            Column D: Top Right Text (cost, ability icon, etc.)<br>
+            Column E: Card Body Content<br>
+            Column F: Footer Text<br>
+            Column G: Quantity (how many copies of this card to print)</p>
+            <p><em>Each row represents one card design. Leave columns blank if not needed. The first row will be skipped as headers.</em></p>
+        </div>
+    </div>
+
+    <div id="cardsContainer"></div>
+
+    <script>
+        let cardsData = [];
+        let currentLayout = 'portrait-portrait';
+        
+        // Layout configurations
+        const layoutConfigs = {
+            'portrait-portrait': {
+                pageOrientation: 'portrait',
+                pageWidth: '215.9mm',
+                pageHeight: '279.4mm',
+                cardWidth: '44mm',
+                cardHeight: '68mm',
+                columns: 4,
+                rows: 4,
+                cardsPerPage: 16
+            },
+            'landscape-landscape': {
+                pageOrientation: 'portrait',
+                pageWidth: '279.4mm',
+                pageHeight: '215.9mm',
+                cardWidth: '68mm',
+                cardHeight: '44mm',
+                columns: 3,
+                rows: 6,
+                cardsPerPage: 18
+            }
+        };
+        
+        function changeLayout() {
+            const selectedLayout = document.querySelector('input[name="layout"]:checked').value;
+            currentLayout = selectedLayout;
+            updatePageStyles();
+            if (cardsData.length > 0) {
+                renderCards();
+            }
+        }
+        
+        function updatePageStyles() {
+            const config = layoutConfigs[currentLayout];
+            
+            // Update page styles
+            let existingStyle = document.getElementById('dynamic-styles');
+            if (existingStyle) {
+                existingStyle.remove();
+            }
+            
+            const style = document.createElement('style');
+            style.id = 'dynamic-styles';
+            style.textContent = `
+                @page {
+                    size: letter ${config.pageOrientation};
+                    margin: 5mm;
+                }
+                
+                .page {
+                    width: ${config.pageWidth};
+                    min-height: ${config.pageHeight};
+                    padding: 0;
+                    background: white;
+                    margin: 20px auto;
+                }
+                
+                .cards-grid {
+                    display: grid;
+                    grid-template-columns: repeat(${config.columns}, ${config.cardWidth});
+                    grid-template-rows: repeat(${config.rows}, ${config.cardHeight});
+                    gap: 0.5mm;
+                    justify-content: center;
+                    align-content: center;
+                }
+                
+                .card {
+                    width: ${config.cardWidth};
+                    height: ${config.cardHeight};
+                    border: 2mm solid #000;
+                    padding: 3mm;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: space-between;
+                    background: white;
+                    font-size: 11pt;
+                    line-height: 1.2;
+                }
+            `;
+            
+            document.head.appendChild(style);
+        }
+        
+        async function loadSheetData() {
+            let apiKey = document.getElementById('apiKey').value;
+            let sheetId = document.getElementById('sheetId').value;
+            const range = document.getElementById('sheetRange').value;
+            const statusDiv = document.getElementById('status');
+            
+            if (!apiKey || !sheetId) {
+                showStatus('Please enter both API Key and Sheet ID', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('Loading data from Google Sheets...', 'success');
+                
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?key=${apiKey}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
+                
+                if (!data.values || data.values.length === 0) {
+                    throw new Error('No data found in the specified range');
+                }
+                
+                // Process the data with quantity support, skipping header row
+                cardsData = [];
+                data.values.slice(1).forEach((row, index) => { // slice(1) skips the first row
+                    const color = row[0] || '#000000';
+                    const topLeft = row[1] || '';
+                    const title = row[2] || `Card ${index + 1}`;
+                    const topRight = row[3] || '';
+                    const content = row[4] || 'No content';
+                    const footer = row[5] || '';
+                    const quantity = parseInt(row[6]) || 1;
+                    
+                    // Create the specified number of copies
+                    for (let i = 0; i < quantity; i++) {
+                        cardsData.push({
+                            color: color,
+                            topLeft: topLeft,
+                            title: title,
+                            topRight: topRight,
+                            content: content,
+                            footer: footer
+                        });
+                    }
+                });
+                
+                showStatus(`Successfully loaded ${cardsData.length} cards!`, 'success');
+                renderCards();
+                
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+        
+        function showSampleData() {
+            cardsData = [
+                { color: 'red', topLeft: '3', title: 'Fire Spell', topRight: '⚡', content: 'Deal 3 damage to target enemy. This card demonstrates corner text functionality.', footer: 'Common' },
+                { color: 'blue', topLeft: '2', title: 'Water Shield', topRight: '🛡️', content: 'Protect yourself from the next attack. Shows how icons work in corners.', footer: 'Rare' },
+                { color: '#00AA00', topLeft: '1', title: 'Heal', topRight: '❤️', content: 'Restore 5 health points. Green border with cost and heart icon.', footer: 'Common' },
+                { color: 'purple', topLeft: '4', title: 'Magic Missile', topRight: '', content: 'A reliable spell that always hits. Only has top-left cost, no top-right.', footer: 'Epic' },
+                { color: 'orange', topLeft: '', title: 'Lightning Bolt', topRight: '⚡⚡', content: 'Fast spell with chain lightning. No cost, but double lightning icons.', footer: 'Legendary' },
+                { color: 'red', topLeft: '5', title: 'Fireball', topRight: '🔥', content: 'Powerful area damage spell. High cost but devastating effect on multiple targets.', footer: '' }
+            ];
+            
+            showStatus('Sample data loaded. Use the form above to load your actual Google Sheet.', 'success');
+            renderCards();
+        }
+        
+        function renderCards() {
+            const container = document.getElementById('cardsContainer');
+            container.innerHTML = '';
+            
+            const config = layoutConfigs[currentLayout];
+            const cardsPerPage = config.cardsPerPage;
+            
+            // Calculate number of pages needed
+            const totalPages = Math.ceil(cardsData.length / cardsPerPage);
+            
+            for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+                const page = document.createElement('div');
+                page.className = 'page';
+                
+                const grid = document.createElement('div');
+                grid.className = 'cards-grid';
+                
+                // Add cards for this page
+                const startIndex = pageNum * cardsPerPage;
+                const endIndex = Math.min(startIndex + cardsPerPage, cardsData.length);
+                
+                for (let i = startIndex; i < endIndex; i++) {
+                    const cardData = cardsData[i];
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.style.borderColor = cardData.color;
+                    
+                    card.innerHTML = `
+                        <div class="card-top-row">
+                            <div class="card-top-left">${escapeHtml(cardData.topLeft)}</div>
+                            <div class="card-top-right">${escapeHtml(cardData.topRight)}</div>
+                        </div>
+                        <div class="card-title">${escapeHtml(cardData.title)}</div>
+                        <div class="card-content">${escapeHtml(cardData.content)}</div>
+                        <div class="card-footer">${escapeHtml(cardData.footer)}</div>
+                    `;
+                    
+                    grid.appendChild(card);
+                }
+                
+                // Fill empty slots if needed
+                const remainingSlots = cardsPerPage - (endIndex - startIndex);
+                for (let i = 0; i < remainingSlots; i++) {
+                    const emptyCard = document.createElement('div');
+                    emptyCard.className = 'card';
+                    emptyCard.style.visibility = 'hidden';
+                    grid.appendChild(emptyCard);
+                }
+                
+                page.appendChild(grid);
+                container.appendChild(page);
+            }
+        }
+        
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load sample data on page load
+        window.onload = function() {
+            updatePageStyles(); // Set initial styles
+            showSampleData();
+        };
+    </script>
+</body>
+</html>
