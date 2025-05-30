@@ -115,8 +115,7 @@
         }
         
         .card-top-left, .card-top-right {
-            font-weight: bold;
-            font-size: 10pt;
+            font-size: 14pt;
             color: #333;
         }
         
@@ -125,6 +124,7 @@
             font-size: 14pt;
             text-align: center;
             margin-bottom: 2mm;
+            min-height: 22px;
         }
         
         .card-content {
@@ -133,14 +133,7 @@
         }
         
         .card-footer {
-            font-size: 11pt;
-            text-align: center;
-            color: #666;
-            margin-top: 2mm;
-        }
-        
-        .card-footer {
-            font-size: 7pt;
+            font-size: 10pt;
             text-align: center;
             color: #666;
             margin-top: 2mm;
@@ -176,8 +169,8 @@
         <p><strong>Step 2:</strong> Enter your Google Sheet ID (from the URL between /d/ and /edit)</p>
         <input type="text" id="sheetId" placeholder="Enter your Google Sheet ID">
         <br>
-        <p><strong>Step 3:</strong> Enter the range (e.g., Sheet1!A:G for columns A-G)</p>
-        <input type="text" id="sheetRange" placeholder="Sheet1!A:G" value="Sheet1!A:G">
+        <p><strong>Step 3:</strong> Enter the range (e.g., A:G for columns A-G)</p>
+        <input type="text" id="sheetRange" placeholder="A:G" value="A:G">
         <br>
         <button onclick="loadSheetData()">Load Cards from Google Sheet</button>
         <button onclick="showSampleData()">Show Sample Data</button>
@@ -186,6 +179,9 @@
             <label style="font-weight: bold;">Layout Options:</label><br>
             <label><input type="radio" name="layout" value="portrait-portrait" checked onchange="changeLayout()"> Portrait Cards on Portrait Page (4×4)</label><br>
             <label><input type="radio" name="layout" value="landscape-landscape" onchange="changeLayout()"> Landscape Cards on Landscape Page (3×6)</label>
+        </div>
+        <div style="margin-top: 15px;">
+            <label><input type="checkbox" id="thinBorders" onchange="toggleBorderWidth()"> Thin Borders</label>
         </div>
         <div id="status"></div>
         
@@ -222,8 +218,8 @@
             },
             'landscape-landscape': {
                 pageOrientation: 'portrait',
-                pageWidth: '215.9',
-                pageHeight: '279.4',
+                pageWidth: '215.9mm',
+                pageHeight: '279.4mm',
                 cardWidth: '68mm',
                 cardHeight: '44mm',
                 columns: 3,
@@ -241,8 +237,24 @@
             }
         }
         
+        function toggleBorderWidth() {
+            const thinBorders = document.getElementById('thinBorders').checked;
+            const borderWidth = thinBorders ? '1px' : '2mm';
+            
+            // Update border width for all existing cards
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(card => {
+                card.style.borderWidth = borderWidth;
+            });
+            
+            // Update the dynamic styles for future cards
+            updatePageStyles();
+        }
+        
         function updatePageStyles() {
             const config = layoutConfigs[currentLayout];
+            const thinBorders = document.getElementById('thinBorders').checked;
+            const borderWidth = thinBorders ? '1px' : '2mm';
             
             // Update page styles
             let existingStyle = document.getElementById('dynamic-styles');
@@ -278,7 +290,7 @@
                 .card {
                     width: ${config.cardWidth};
                     height: ${config.cardHeight};
-                    border: 2mm solid #000;
+                    border: ${borderWidth} solid #000;
                     padding: 3mm;
                     display: flex;
                     flex-direction: column;
@@ -293,8 +305,8 @@
         }
         
         async function loadSheetData() {
-            let apiKey = document.getElementById('apiKey').value;
-            let sheetId = document.getElementById('sheetId').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const sheetId = document.getElementById('sheetId').value;
             const range = document.getElementById('sheetRange').value;
             const statusDiv = document.getElementById('status');
             
